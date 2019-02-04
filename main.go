@@ -1,28 +1,49 @@
 package main
 
 import (
-	// [START import]
 	"fmt"
 	"html/template"
-	// [END import]
 	"net/http"
+	"time"
+
+	// [START imports]
+	firebase "firebase.google.com/go"
+	// [END imports]
 
 	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 )
 
-// [START templ_variable]
+//[START firebase config variable]
 var (
+	firebaseConfig = &firebase.Config{
+		DatabaeURL:    "https://sma-cloud-storage.firebaseio.com",
+		ProjectID:     "sma-cloud-storage",
+		StorageBucket: "sma-cloud-storage.appspot.com",
+	}
 	indexTemplate = template.Must(template.ParseFiles("index.html"))
 )
 
-// [END templ_variable]
-// [START templ_params]
-type templateParams struct {
-	Notice string
-	Name   string
+// [END firebase config variable]
+// [START new_post_field]
+
+type Post struct {
+	Author  string
+	UserID  string
+	Message string
+	Posted  time.Time
 }
 
-// [END templ_params]
+// [END new_post_field]
+
+type templateParams struct {
+	Notice  string
+	Name    string
+	Message string
+	Posts   []Post
+}
+
 func main() {
 	http.HandleFunc("/", indexHandler)
 	appengine.Main()
@@ -33,35 +54,92 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
-	// [START handling]
+	ctx := appengine.NewContext(r)
 	params := templateParams{}
+
+	q := datastore.NewQuery("Post").Order("-Posted").Limit(20)
+	if _, err := q.GetAll(ctx, &params.Posts); err != nil {
+		log.Errorf(ctx, "Getting posts: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		params.Notice = "Couldn't get latest posts. Refresh?"
+		indexTemplate.Execute(w, params)
+		return
+	}
 
 	if r.Method == "GET" {
 		indexTemplate.Execute(w, params)
 		return
 	}
-
 	// It's a POST request, so handle the form submission.
 
-	name := r.FormValue("name")
-	params.Name = name // Preserve the name field.
-	if name == "" {
-		name = "Anonymous Gopher"
+	// [START firebase_token]
+	message := r.FormValue("message")
+
+	// Create a new Firebase App.
+	app, err := firebase.NewApp(ctx, firebaseConfig)
+	if err != nil {
+		params.Notice = "Couldn't authenticate. Try logging in again?"
+		params.Message = message // Preserve their message so they can try again.
+		indexTemplate.Execute(w, params)
+		return
 	}
-
-	if r.FormValue("message") == "" {
-		w.WriteHeader(http.StatusBadRequest)
-
-		params.Notice = "No message provided"
+	// Create a new authenticator for the app.
+	auth, err := app.Auth(ctx)
+	if err != nil {
+		params.Notice = "Couldn't authenticate. Try logging in again?"
+		params.Message = message // Preserve their message so they can try again.
+		indexTemplate.Execute(w, params)
+		return
+	}
+	// Verify the token passed in by the user is valid.
+	tok, err := auth.VerifyIDTokenAndCheckRevoked(ctx, r.FormValue("token"))
+	if err != nil {
+		params.Notice = "Couldn't authenticate. Try logging in again?"
+		params.Message = message // Preserve their message so they can try again.
+		indexTemplate.Execute(w, params)
+		return
+	}
+	// Use the validated token to get the user's information.
+	user, err := auth.GetUser(ctx, tok.UID)
+	if err != nil {
+		params.Notice = "Couldn't authenticate. Try logging in again?"
+		params.Message = message // Preserve their message so they can try again.
 		indexTemplate.Execute(w, params)
 		return
 	}
 
-	// TODO: save the message into a database.
+	// [END firebase_token]
 
-	params.Notice = fmt.Sprintf("Thank you for your submission, %s!", name)
-	// [END handling]
-	// [START execute]
+	// [START logged_in_post]
+	post := Post{
+		UserID:  user.UID, // Include UserID in case Author isn't unique.
+		Author:  user.DisplayName,
+		Message: message,
+		Posted:  time.Now(),
+	}
+	// [END logged_in_post]
+
+	params.Name = post.Author
+
+	if post.Message == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		params.Notice = "No message provided"
+		indexTemplate.Execute(w, params)
+		return
+	}
+	key := datastore.NewIncompleteKey(ctx, "Post", nil)
+	if _, err := datastore.Put(ctx, key, &post); err != nil {
+		log.Errorf(ctx, "datastore.Put: %v", err)
+
+		w.WriteHeader(http.StatusInternalServerError)
+		params.Notice = "Couldn't add new post. Try again?"
+		params.Message = post.Message // Preserve their message so they can try again.
+		indexTemplate.Execute(w, params)
+		return
+	}
+
+	// Prepend the post that was just added.
+	params.Posts = append([]Post{post}, params.Posts...)
+	params.Notice = fmt.Sprintf("Thank you for your submission, %s!", post.Author)
 	indexTemplate.Execute(w, params)
-	// [END execute]
 }
