@@ -1,9 +1,18 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-    <title>The Gopher Network</title>
-    <link rel="stylesheet" type="text/css" href="/static/style.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.6/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js"></script>
+    <title>SMA America service uploader</title>
+
+    <link type="text/css" rel="stylesheet" href="/static/style.css" />
     <script src="https://www.gstatic.com/firebasejs/5.8.2/firebase.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/5.8.2/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/5.8.2/firebase-auth.js"></script>
     <script>
         // Initialize Firebase
         var config = {
@@ -16,56 +25,32 @@
         };
         firebase.initializeApp(config);
     </script>
-    <script>
-        if (typeof firebase === 'undefined') {
-            const msg = "Please paste the Firebase initialization snippet into index.html. See https://console.firebase.google.com > Overview > Add Firebase to your web app.";
-            console.log(msg);
-            alert(msg);
-        }
-    </script>
-    <!-- [START include_firebaseui] -->
-    <script src="https://cdn.firebase.com/libs/firebaseui/2.6.2/firebaseui.js"></script>
-    <link type="text/css" rel="stylesheet" href="https://cdn.firebase.com/libs/firebaseui/2.6.2/firebaseui.css" />
-    <!-- [END include_firebaseui] -->
     <!-- [START index_js] -->
     <script src="/static/index.js"></script>
     <!-- [END index_js] -->
 </head>
 <body>
 
-<h1>The Gopher Network</h1>
-
-<img id="logo" src="/static/gcp-gopher.svg" width="100">
-
-<!-- [START firebase_container] -->
-<div id="firebaseui-auth-container"></div>
-<!-- [END firebase_container] -->
-
-<!-- [START signin_status] -->
-<div id="sign-in"></div>
-<div>
-    <span id="account-details"></span>
-    <button id="sign-out" hidden=true>Sign Out</button>
-</div>
-<!-- [END signin_status] -->
+<h1>SMA America service uploader</h1>
 
 {{with .Notice}}<div id="notice">{{.}}</div>{{end}}
 
+<div class="form-group">
+    <label for="email">Email:</label>
+    <input type="email" class="form-control" id="email" name="email">
+</div>
+<div class="form-group">
+    <label for="pwd">Password:</label>
+    <input type="password" class="form-control" id="password" name="password">
+</div>
+<button type="submit" class="btn-signin" onclick="handleSignIn()">Sign In</button>
+<button type="submit" class="btn-signup" onclick="handleSignUp()">Sign Up</button>
+
 <!-- [START token_input] -->
 <form id="post-form" action="/" method="post" hidden=true>
-    <div>Message: <input name="message" value="{{.Message}}"></div>
     <input type="hidden" name="token" id="token">
     <input type="submit">
 </form>
 <!-- [END token_input] -->
-
-{{with .Posts}}
-    <ol>
-        {{range .}}
-            <li><cite>{{.Author}}</cite><p>{{.Message}}</p></li>
-        {{end}}
-    </ol>
-{{end}}
-
 </body>
 </html>

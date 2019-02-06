@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"html/template"
 	"net/http"
 	"time"
@@ -18,14 +17,16 @@ import (
 //[START firebase config variable]
 var (
 	firebaseConfig = &firebase.Config{
-		DatabaeURL:    "https://sma-cloud-storage.firebaseio.com",
+		DatabaseURL:   "https://sma-cloud-storage.firebaseio.com",
 		ProjectID:     "sma-cloud-storage",
 		StorageBucket: "sma-cloud-storage.appspot.com",
 	}
-	indexTemplate = template.Must(template.ParseFiles("index.html"))
+	indexTemplate  = template.Must(template.ParseFiles("index.html"))
+	uploadTemplate = template.Must(template.ParseFiles("upload.html"))
 )
 
-// [END firebase config variable]
+// [END new_variable]
+
 // [START new_post_field]
 
 type Post struct {
@@ -46,7 +47,12 @@ type templateParams struct {
 
 func main() {
 	http.HandleFunc("/", indexHandler)
+	http.HandleFunc("/upload", uploadHandler)
 	appengine.Main()
+}
+
+func uploadHandler(w http.ResponseWriter, r *http.Request) {
+
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -106,6 +112,8 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		params.Message = message // Preserve their message so they can try again.
 		indexTemplate.Execute(w, params)
 		return
+	} else if user != nil {
+		uploadTemplate.Execute(w, params)
 	}
 
 	// [END firebase_token]
@@ -118,28 +126,6 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		Posted:  time.Now(),
 	}
 	// [END logged_in_post]
-
 	params.Name = post.Author
-
-	if post.Message == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		params.Notice = "No message provided"
-		indexTemplate.Execute(w, params)
-		return
-	}
-	key := datastore.NewIncompleteKey(ctx, "Post", nil)
-	if _, err := datastore.Put(ctx, key, &post); err != nil {
-		log.Errorf(ctx, "datastore.Put: %v", err)
-
-		w.WriteHeader(http.StatusInternalServerError)
-		params.Notice = "Couldn't add new post. Try again?"
-		params.Message = post.Message // Preserve their message so they can try again.
-		indexTemplate.Execute(w, params)
-		return
-	}
-
-	// Prepend the post that was just added.
-	params.Posts = append([]Post{post}, params.Posts...)
-	params.Notice = fmt.Sprintf("Thank you for your submission, %s!", post.Author)
-	indexTemplate.Execute(w, params)
+	uploadTemplate.Execute(w, params)
 }
